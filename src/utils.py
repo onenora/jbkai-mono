@@ -122,17 +122,10 @@ def update_font_names(
     # Using the same names as English for now, but registering them under zh-CN
     # helps Excel and other Windows CJK applications recognise the font.
     #
-    # NOTE (Apple compatibility): macOS Font Book validates that name records
-    # for platformID=3 are unique per nameID. These zh-CN duplicates do NOT
-    # cause a hard installation failure, but they trigger a validation warning
-    # on macOS 13+. If Apple compatibility is a priority, these entries can be
-    # removed without any impact on Windows behaviour.
-    cn_lang_id = 0x804
-    set_font_name(font, family_name, 1, mac=False, lang_id=cn_lang_id)
-    set_font_name(font, style_name, 2, mac=False, lang_id=cn_lang_id)
-    set_font_name(font, full_name, 4, mac=False, lang_id=cn_lang_id)
-    set_font_name(font, family_name, 16, mac=False, lang_id=cn_lang_id)
-    set_font_name(font, style_name, 17, mac=False, lang_id=cn_lang_id)
+    # NOTE (Apple compatibility): macOS/iOS Font Book validates that name
+    # records for platformID=3 are unique per nameID. The zh-CN duplicates
+    # cause validation failure on iOS (font rejected) and a warning on
+    # macOS 13+. Removed for Apple compatibility.
 
     # Fix achVendID: the source JetBrains Mono font ships 'JB\x00\x00' (two
     # trailing null bytes). Apple's font validator requires all four characters
