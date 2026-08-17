@@ -228,9 +228,10 @@ def scale_nerd_icons(font: TTFont, config: FontConfig) -> None:
 
     print(f"  Processing {len(nerd_glyph_map)} NerdFont icons...")
 
-    # Target: scale icons to ~70% of 1200 = 840 units (similar to CJK fill ratio)
-    # Original icon width is ~600, so scale factor = 840 / 600 = 1.4
-    scale_factor = 1.4
+    # Single-width icons: keep original size (~60-70% of 600 cell)
+    # so content icons align with English characters instead of CJK width.
+    # Powerline separators below remain 2-cells wide by design.
+    scale_factor = 1.0
 
     powerline_count = 0
     scaled_count = 0
@@ -284,11 +285,11 @@ def scale_nerd_icons(font: TTFont, config: FontConfig) -> None:
                 glyph.coordinates.scale((scale_factor, scale_factor))
                 glyph.recalcBounds(glyf)
 
-            # Update advance width to CJK width (1200)
+            # Update advance width to English width (600) for single-width icons
             # Center the glyph horizontally and vertically
             if hasattr(glyph, 'xMin') and glyph.xMin is not None:
                 glyph_width = glyph.xMax - glyph.xMin
-                ideal_lsb = (config.cn_width - glyph_width) // 2
+                ideal_lsb = (config.en_width - glyph_width) // 2
                 delta_x = ideal_lsb - glyph.xMin
 
                 # Vertical centering: align icon center with CJK center (~360)
@@ -300,14 +301,14 @@ def scale_nerd_icons(font: TTFont, config: FontConfig) -> None:
                     glyph.coordinates.translate((delta_x, delta_y))
                     glyph.recalcBounds(glyf)
 
-                hmtx[glyph_name] = (config.cn_width, ideal_lsb)
+                hmtx[glyph_name] = (config.en_width, ideal_lsb)
             else:
-                hmtx[glyph_name] = (config.cn_width, 0)
+                hmtx[glyph_name] = (config.en_width, 0)
 
             scaled_count += 1
 
     print(f"    Powerline symbols (no scaling): {powerline_count}")
-    print(f"    Regular icons (scaled 1.4x): {scaled_count}")
+    print(f"    Regular icons (scaled {scale_factor}x, single-width): {scaled_count}")
 
 
 def center_cjk_glyphs(font: TTFont, config: FontConfig) -> None:
