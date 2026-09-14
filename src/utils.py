@@ -4,11 +4,7 @@ from fontTools.ttLib import TTFont
 
 
 def set_font_name(
-    font: TTFont,
-    name: str,
-    name_id: int,
-    mac: bool = True,
-    lang_id: int = 0x409
+    font: TTFont, name: str, name_id: int, mac: bool = True, lang_id: int = 0x409
 ) -> None:
     """Set font name entry.
 
@@ -27,18 +23,14 @@ def set_font_name(
         name_table.removeNames(nameID=name_id)
 
     # Windows platform (platformID=3, platEncID=1 = Unicode BMP)
-    name_table.setName(
-        name, nameID=name_id, platformID=3, platEncID=1, langID=lang_id
-    )
+    name_table.setName(name, nameID=name_id, platformID=3, platEncID=1, langID=lang_id)
 
     # Mac platform (platformID=1, platEncID=0 = Roman, langID=0 = English)
     # Only set if string is encodable in mac_roman
     if mac and lang_id == 0x409:
         try:
             name.encode("mac_roman")
-            name_table.setName(
-                name, nameID=name_id, platformID=1, platEncID=0, langID=0x0
-            )
+            name_table.setName(name, nameID=name_id, platformID=1, platEncID=0, langID=0x0)
         except UnicodeEncodeError:
             pass
 
@@ -171,9 +163,7 @@ def merge_os2_ranges(target_font: TTFont, source_font: TTFont) -> None:
         print("  Merged OS/2 Code Page Ranges")
 
 
-def is_cjk_codepoint(
-    codepoint: int, cjk_ranges: tuple[tuple[int, int], ...]
-) -> bool:
+def is_cjk_codepoint(codepoint: int, cjk_ranges: tuple[tuple[int, int], ...]) -> bool:
     """Check if a Unicode codepoint is in CJK ranges.
 
     Args:
@@ -190,24 +180,25 @@ def is_cjk_codepoint(
 
 
 def verify_glyph_width(
-    font: TTFont, expected_widths: list[int], file_name: str | None = None
+    font: TTFont, expected_widths: list[int] | tuple[int, ...], file_name: str | None = None
 ) -> None:
     """Verify all glyph widths are in expected values.
 
     Args:
         font: TTFont object
-        expected_widths: List of valid advance widths
+        expected_widths: Valid advance widths
         file_name: Optional file name for error messages
 
     Raises:
         ValueError: If glyphs with unexpected widths are found
     """
-    unexpected = []
+    unexpected: list[tuple[str, int]] = []
     hmtx = font["hmtx"]
+    valid_widths = set(expected_widths) | {0}
 
     for name in font.getGlyphOrder():
         width, _ = hmtx[name]
-        if width not in expected_widths and width != 0:
+        if width not in valid_widths:
             unexpected.append((name, width))
 
     if not unexpected:

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+type CjkRange = tuple[int, int]
 
-@dataclass(slots=True)
+
+@dataclass(slots=True, frozen=True)
 class FontConfig:
     """Configuration for font building."""
 
@@ -20,7 +22,7 @@ class FontConfig:
     cn_width: int = 1200  # CJK character width (2x)
 
     # CJK Unicode ranges
-    cjk_ranges: tuple[tuple[int, int], ...] = (
+    cjk_ranges: tuple[CjkRange, ...] = (
         (0x4E00, 0x9FFF),  # CJK Unified Ideographs
         (0x3400, 0x4DBF),  # CJK Unified Ideographs Extension A
         (0x20000, 0x2A6DF),  # CJK Unified Ideographs Extension B

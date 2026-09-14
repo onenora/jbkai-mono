@@ -24,9 +24,7 @@ def load_config(config_path: Path) -> dict[str, Any]:
     return yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
 
 
-def get_config_value(
-    yaml_config: dict[str, Any], *keys: str, default: Any = None
-) -> Any:
+def get_config_value(yaml_config: dict[str, Any], *keys: str, default: Any = None) -> Any:
     """Get nested value from config dictionary."""
     val: Any = yaml_config
     for key in keys:
@@ -38,6 +36,9 @@ def get_config_value(
     return val
 
 
+type FontMetadata = dict[str, str]
+
+
 def build_single_font(
     style: str,
     en_font_path: Path,
@@ -45,7 +46,7 @@ def build_single_font(
     display_name: str,
     output_dir: Path,
     config: FontConfig,
-    metadata: dict[str, Any],
+    metadata: FontMetadata,
 ) -> str:
     """Build a single font variant.
 
@@ -182,9 +183,7 @@ Configuration priority: CLI args > config.yaml > defaults
         or get_config_value(yaml_config, "build", "styles")
         or ",".join(styles_config.keys())
     )
-    fonts_dir = args.fonts_dir or Path(
-        get_config_value(yaml_config, "fonts_dir") or "fonts"
-    )
+    fonts_dir = args.fonts_dir or Path(get_config_value(yaml_config, "fonts_dir") or "fonts")
     output_dir = args.output_dir or Path(
         get_config_value(yaml_config, "build", "output_dir") or "output/fonts"
     )
@@ -195,7 +194,7 @@ Configuration priority: CLI args > config.yaml > defaults
             yaml_config,
             "build",
             "parallel",
-            default=min(len(styles_config), os.cpu_count() or 4),
+            default=min(len(styles_config), os.process_cpu_count() or os.cpu_count() or 4),
         )
     )
 
@@ -244,9 +243,7 @@ Configuration priority: CLI args > config.yaml > defaults
         display_name = style_cfg.get("display_name", style)
 
         if not en_font or not cn_font:
-            print(
-                f"Error: Style '{style}' must have both 'en_font' and 'cn_font' defined"
-            )
+            print(f"Error: Style '{style}' must have both 'en_font' and 'cn_font' defined")
             sys.exit(1)
 
         en_font_path = fonts_dir / en_font
@@ -297,20 +294,19 @@ Configuration priority: CLI args > config.yaml > defaults
     else:
         # Parallel build
         with ProcessPoolExecutor(max_workers=parallel) as executor:
-            futures = {}
-            for style in styles:
-                paths = font_paths[style]
-                future = executor.submit(
+            futures = {
+                executor.submit(
                     build_single_font,
                     style,
-                    paths["en_font_path"],
-                    paths["cn_font_path"],
-                    paths["display_name"],
+                    font_paths[style]["en_font_path"],
+                    font_paths[style]["cn_font_path"],
+                    font_paths[style]["display_name"],
                     output_dir,
                     config,
                     metadata,
-                )
-                futures[future] = style
+                ): style
+                for style in styles
+            }
 
             for future in as_completed(futures):
                 style = futures[future]

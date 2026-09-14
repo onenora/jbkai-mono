@@ -7,17 +7,50 @@ from fontTools.ttLib import TTFont
 from .config import FontConfig
 from .utils import is_cjk_codepoint, merge_os2_ranges
 
-
-def get_cjk_glyphs(font: TTFont, config: FontConfig) -> set[str]:
-    """Get all CJK glyph names from a font."""
-    cmap = font["cmap"].getBestCmap()
-    if not cmap:
-        return set()
-    return {
-        glyph_name
-        for codepoint, glyph_name in cmap.items()
-        if is_cjk_codepoint(codepoint, config.cjk_ranges)
+LEFT_PUNCTUATION: frozenset[int] = frozenset(
+    {
+        0x3010,  # 【
+        0x300A,  # 《
+        0x3008,  # 〈
+        0x300C,  # 「
+        0x300E,  # 『
+        0x3014,  # 〔
+        0x3016,  # 〖
+        0x3018,  # 〘
+        0x301A,  # 〚
+        0xFF08,  # （
+        0xFF3B,  # ［
+        0xFF5B,  # ｛
+        0x2018,  # '
+        0x201C,  # "
     }
+)
+
+RIGHT_PUNCTUATION: frozenset[int] = frozenset(
+    {
+        0x3011,  # 】
+        0x300B,  # 》
+        0x3009,  # 〉
+        0x300D,  # 」
+        0x300F,  # 』
+        0x3015,  # 〕
+        0x3017,  # 〗
+        0x3019,  # 〙
+        0x301B,  # 〛
+        0xFF09,  # ）
+        0xFF3D,  # ］
+        0xFF5D,  # ｝
+        0x2019,  # '
+        0x201D,  # "
+    }
+)
+
+NERD_RANGES: tuple[tuple[int, int], ...] = (
+    (0xE000, 0xF8FF),  # Private Use Area
+    (0xF0000, 0xFFFFD),  # Supplementary Private Use Area-A
+)
+
+POWERLINE_RANGE: tuple[int, int] = (0xE0A0, 0xE0DF)
 
 
 def get_cjk_cmap_entries(font: TTFont, config: FontConfig) -> dict[int, str]:
@@ -30,6 +63,11 @@ def get_cjk_cmap_entries(font: TTFont, config: FontConfig) -> dict[int, str]:
         for codepoint, glyph_name in cmap.items()
         if is_cjk_codepoint(codepoint, config.cjk_ranges)
     }
+
+
+def get_cjk_glyphs(font: TTFont, config: FontConfig) -> set[str]:
+    """Get all CJK glyph names from a font."""
+    return set(get_cjk_cmap_entries(font, config).values())
 
 
 def merge_fonts(
@@ -63,8 +101,8 @@ def merge_fonts(
     base_glyph_names = set(base_font.getGlyphOrder())
 
     # Get CJK glyphs and cmap entries from CN font
-    cjk_glyphs = get_cjk_glyphs(cn_font, config)
     cjk_cmap = get_cjk_cmap_entries(cn_font, config)
+    cjk_glyphs = set(cjk_cmap.values())
 
     print(f"  Found {len(cjk_glyphs)} CJK glyphs in CN font")
 
@@ -82,7 +120,9 @@ def merge_fonts(
     # visual_scale adjusts the final glyph size (1.08 = 8% larger)
     upm_scale = base_upm / cn_upm  # e.g., 1000 / 2048 = 0.4883
     combined_scale = upm_scale * config.visual_scale
-    print(f"  Scaling CN glyphs by {combined_scale:.4f} (UPM: {cn_upm} -> {base_upm}, visual: {config.visual_scale:.2f}x)")
+    print(
+        f"  Scaling CN glyphs by {combined_scale:.4f} (UPM: {cn_upm} -> {base_upm}, visual: {config.visual_scale:.2f}x)"
+    )
 
     glyphs_added = []
 
@@ -104,7 +144,7 @@ def merge_fonts(
         # Scale glyph to fit target width
         if hasattr(glyph, "coordinates") and glyph.numberOfContours > 0:
             # Ensure bounds are calculated before scaling
-            if not hasattr(glyph, 'xMin') or glyph.xMin is None:
+            if not hasattr(glyph, "xMin") or glyph.xMin is None:
                 glyph.recalcBounds(base_glyf)
 
             # Apply combined scaling
@@ -154,9 +194,7 @@ def merge_fonts(
 
     # Update hhea table
     if "hhea" in base_font:
-        base_font["hhea"].advanceWidthMax = max(
-            base_font["hhea"].advanceWidthMax, config.cn_width
-        )
+        base_font["hhea"].advanceWidthMax = max(base_font["hhea"].advanceWidthMax, config.cn_width)
         base_font["hhea"].numberOfHMetrics = len(base_hmtx.metrics)
 
     # Merge OS/2 ranges from CN font to base font
@@ -184,21 +222,13 @@ def scale_nerd_icons(font: TTFont, config: FontConfig) -> None:
     glyf = font["glyf"]
     hmtx = font["hmtx"]
     cmap = font["cmap"].getBestCmap()
-
-    # NerdFont icon Unicode ranges
-    nerd_ranges = [
-        (0xE000, 0xF8FF),      # Private Use Area
-        (0xF0000, 0xFFFFD),    # Supplementary Private Use Area-A
-    ]
-
-    # Powerline symbols range - these need special handling
-    # They must span the full line height and not be scaled
-    powerline_range = (0xE0A0, 0xE0DF)
+    if not cmap:
+        return
 
     # Build mapping: codepoint -> glyph_name for nerd icons
-    nerd_glyph_map = {}  # glyph_name -> codepoint
+    nerd_glyph_map: dict[str, int] = {}
     for codepoint, glyph_name in cmap.items():
-        for start, end in nerd_ranges:
+        for start, end in NERD_RANGES:
             if start <= codepoint <= end:
                 nerd_glyph_map[glyph_name] = codepoint
                 break
@@ -230,17 +260,17 @@ def scale_nerd_icons(font: TTFont, config: FontConfig) -> None:
             continue  # Skip if not standard English width
 
         # Check if this is a Powerline symbol
-        is_powerline = powerline_range[0] <= codepoint <= powerline_range[1]
+        is_powerline = POWERLINE_RANGE[0] <= codepoint <= POWERLINE_RANGE[1]
 
         if is_powerline:
             # Powerline symbols: only adjust width, no scaling or vertical shift
             # These symbols need to maintain their original vertical bounds
             if hasattr(glyph, "coordinates"):
-                if not hasattr(glyph, 'xMin') or glyph.xMin is None:
+                if not hasattr(glyph, "xMin") or glyph.xMin is None:
                     glyph.recalcBounds(glyf)
 
                 # Only center horizontally, keep vertical position
-                if hasattr(glyph, 'xMin') and glyph.xMin is not None:
+                if hasattr(glyph, "xMin") and glyph.xMin is not None:
                     glyph_width = glyph.xMax - glyph.xMin
                     ideal_lsb = (config.cn_width - glyph_width) // 2
                     delta_x = ideal_lsb - glyph.xMin
@@ -258,7 +288,7 @@ def scale_nerd_icons(font: TTFont, config: FontConfig) -> None:
             # Regular icons: scale and center both horizontally and vertically
             if hasattr(glyph, "coordinates"):
                 # Ensure bounds are calculated
-                if not hasattr(glyph, 'xMin') or glyph.xMin is None:
+                if not hasattr(glyph, "xMin") or glyph.xMin is None:
                     glyph.recalcBounds(glyf)
 
                 # Scale to 2x size
@@ -267,7 +297,7 @@ def scale_nerd_icons(font: TTFont, config: FontConfig) -> None:
 
             # Update advance width to English width (600) for single-width icons
             # Center the glyph horizontally and vertically
-            if hasattr(glyph, 'xMin') and glyph.xMin is not None:
+            if hasattr(glyph, "xMin") and glyph.xMin is not None:
                 glyph_width = glyph.xMax - glyph.xMin
                 ideal_lsb = (config.en_width - glyph_width) // 2
                 delta_x = ideal_lsb - glyph.xMin
@@ -306,45 +336,15 @@ def center_cjk_glyphs(font: TTFont, config: FontConfig) -> None:
     glyf = font["glyf"]
     hmtx = font["hmtx"]
     cmap = font["cmap"].getBestCmap()
-    cjk_glyphs = get_cjk_glyphs(font, config)
+    if not cmap:
+        return
 
-    # Paired punctuation: left-side chars should align right, right-side should align left
-    # These are codepoints for opening/closing brackets and quotes
-    left_punctuation = {
-        0x3010,  # 【
-        0x300A,  # 《
-        0x3008,  # 〈
-        0x300C,  # 「
-        0x300E,  # 『
-        0x3014,  # 〔
-        0x3016,  # 〖
-        0x3018,  # 〘
-        0x301A,  # 〚
-        0xFF08,  # （
-        0xFF3B,  # ［
-        0xFF5B,  # ｛
-        0x2018,  # '
-        0x201C,  # "
-    }
-    right_punctuation = {
-        0x3011,  # 】
-        0x300B,  # 》
-        0x3009,  # 〉
-        0x300D,  # 」
-        0x300F,  # 』
-        0x3015,  # 〕
-        0x3017,  # 〗
-        0x3019,  # 〙
-        0x301B,  # 〛
-        0xFF09,  # ）
-        0xFF3D,  # ］
-        0xFF5D,  # ｝
-        0x2019,  # '
-        0x201D,  # "
-    }
+    cjk_entries = {cp: gn for cp, gn in cmap.items() if is_cjk_codepoint(cp, config.cjk_ranges)}
+    if not cjk_entries:
+        return
 
-    # Build reverse cmap: glyph_name -> codepoint
-    glyph_to_codepoint = {gn: cp for cp, gn in cmap.items()} if cmap else {}
+    cjk_glyphs = set(cjk_entries.values())
+    glyph_to_codepoint = {gn: cp for cp, gn in cjk_entries.items()}
 
     centered_count = 0
     skipped_count = 0
@@ -373,7 +373,7 @@ def center_cjk_glyphs(font: TTFont, config: FontConfig) -> None:
         codepoint = glyph_to_codepoint.get(glyph_name, 0)
 
         # Handle paired punctuation specially
-        if codepoint in left_punctuation:
+        if codepoint in LEFT_PUNCTUATION:
             # Left punctuation (opening): align to right side
             ideal_lsb = config.cn_width - glyph_width
             delta = ideal_lsb - glyph.xMin
@@ -384,7 +384,7 @@ def center_cjk_glyphs(font: TTFont, config: FontConfig) -> None:
             paired_count += 1
             continue
 
-        if codepoint in right_punctuation:
+        if codepoint in RIGHT_PUNCTUATION:
             # Right punctuation (closing): align to left side
             ideal_lsb = 0
             delta = ideal_lsb - glyph.xMin
@@ -411,4 +411,6 @@ def center_cjk_glyphs(font: TTFont, config: FontConfig) -> None:
             hmtx[glyph_name] = (config.cn_width, ideal_lsb)
             centered_count += 1
 
-    print(f"    Centered: {centered_count}, Paired punctuation: {paired_count}, Skipped (narrow): {skipped_count}")
+    print(
+        f"    Centered: {centered_count}, Paired punctuation: {paired_count}, Skipped (narrow): {skipped_count}"
+    )
