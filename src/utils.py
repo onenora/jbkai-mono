@@ -32,11 +32,15 @@ def set_font_name(
     )
 
     # Mac platform (platformID=1, platEncID=0 = Roman, langID=0 = English)
-    # Only set for English
+    # Only set if string is encodable in mac_roman
     if mac and lang_id == 0x409:
-        name_table.setName(
-            name, nameID=name_id, platformID=1, platEncID=0, langID=0x0
-        )
+        try:
+            name.encode("mac_roman")
+            name_table.setName(
+                name, nameID=name_id, platformID=1, platEncID=0, langID=0x0
+            )
+        except UnicodeEncodeError:
+            pass
 
 
 def update_font_names(
