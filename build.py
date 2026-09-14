@@ -1,25 +1,11 @@
-#!/usr/bin/env python3
-"""
-JBKaiMono Font Builder
-
-Build merged font with:
-- English characters from JetBrains Mono NerdFont
-- CJK characters from LXGW WenKai Mono
-- NerdFont icons preserved
-- 2:1 width ratio (CJK 1200, English 600)
-
-Usage:
-    uv run python build.py
-    uv run python build.py --config config.yaml
-    uv run python build.py --styles Regular,Medium
-"""
+from __future__ import annotations
 
 import argparse
-import json
+import os
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
@@ -27,46 +13,29 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.config import FontConfig
-from src.merge import merge_fonts, center_cjk_glyphs, scale_nerd_icons
+from src.merge import center_cjk_glyphs, merge_fonts, scale_nerd_icons
 from src.utils import update_font_names, verify_glyph_width
 
 
-def load_config(config_path: Path) -> Dict[str, Any]:
-    """Load configuration from YAML file.
-
-    Args:
-        config_path: Path to config.yaml
-
-    Returns:
-        Configuration dictionary
-    """
-    if not config_path.exists():
+def load_config(config_path: Path) -> dict[str, Any]:
+    """Load configuration from YAML file."""
+    if not config_path.is_file():
         return {}
-
-    with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+    return yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
 
 
-def get_config_value(yaml_config: Dict[str, Any], *keys: str, default: Any = None) -> Any:
-    """Get nested value from config dictionary.
-
-    Args:
-        yaml_config: Configuration dictionary
-        keys: Nested keys to access
-        default: Default value if key not found
-
-    Returns:
-        Configuration value or default
-    """
-    value = yaml_config
+def get_config_value(
+    yaml_config: dict[str, Any], *keys: str, default: Any = None
+) -> Any:
+    """Get nested value from config dictionary."""
+    val: Any = yaml_config
     for key in keys:
-        if isinstance(value, dict):
-            value = value.get(key)
-        else:
+        if not isinstance(val, dict):
             return default
-        if value is None:
+        val = val.get(key)
+        if val is None:
             return default
-    return value
+    return val
 
 
 def build_single_font(
@@ -76,7 +45,7 @@ def build_single_font(
     display_name: str,
     output_dir: Path,
     config: FontConfig,
-    metadata: dict,
+    metadata: dict[str, Any],
 ) -> str:
     """Build a single font variant.
 
@@ -213,18 +182,21 @@ Configuration priority: CLI args > config.yaml > defaults
         or get_config_value(yaml_config, "build", "styles")
         or ",".join(styles_config.keys())
     )
-    fonts_dir = (
-        args.fonts_dir
-        or Path(get_config_value(yaml_config, "fonts_dir") or "fonts")
+    fonts_dir = args.fonts_dir or Path(
+        get_config_value(yaml_config, "fonts_dir") or "fonts"
     )
-    output_dir = (
-        args.output_dir
-        or Path(get_config_value(yaml_config, "build", "output_dir") or "output/fonts")
+    output_dir = args.output_dir or Path(
+        get_config_value(yaml_config, "build", "output_dir") or "output/fonts"
     )
     parallel = (
         args.parallel
         if args.parallel is not None
-        else get_config_value(yaml_config, "build", "parallel", default=1)
+        else get_config_value(
+            yaml_config,
+            "build",
+            "parallel",
+            default=min(len(styles_config), os.cpu_count() or 4),
+        )
     )
 
     # Font metadata from config
@@ -264,7 +236,7 @@ Configuration priority: CLI args > config.yaml > defaults
             sys.exit(1)
 
     # Build font paths and validate
-    font_paths: Dict[str, Dict[str, Any]] = {}
+    font_paths: dict[str, dict[str, Any]] = {}
     for style in styles:
         style_cfg = styles_config[style]
         en_font = style_cfg.get("en_font")
@@ -272,7 +244,9 @@ Configuration priority: CLI args > config.yaml > defaults
         display_name = style_cfg.get("display_name", style)
 
         if not en_font or not cn_font:
-            print(f"Error: Style '{style}' must have both 'en_font' and 'cn_font' defined")
+            print(
+                f"Error: Style '{style}' must have both 'en_font' and 'cn_font' defined"
+            )
             sys.exit(1)
 
         en_font_path = fonts_dir / en_font
@@ -345,25 +319,6 @@ Configuration priority: CLI args > config.yaml > defaults
                 except Exception as e:
                     print(f"Error building {style}: {e}")
                     raise
-
-    # Generate font manifest for HTML verification pages
-    manifest = {
-        "family_name": config.family_name,
-        "version": config.version,
-        "fonts": []
-    }
-    for style in styles:
-        display_name = font_paths[style]["display_name"]
-        manifest["fonts"].append({
-            "style": style,
-            "display_name": display_name,
-            "filename": f"{config.family_name_compact}-{style}.ttf"
-        })
-
-    manifest_path = output_dir / "fonts-manifest.json"
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, ensure_ascii=False)
-    print(f"Generated manifest: {manifest_path}")
 
     print(f"\nBuild complete! Fonts saved to: {output_dir}")
 

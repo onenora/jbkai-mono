@@ -1,6 +1,4 @@
-"""Utility functions for font manipulation."""
-
-from typing import List, Tuple, Optional
+from __future__ import annotations
 
 from fontTools.ttLib import TTFont
 
@@ -170,7 +168,7 @@ def merge_os2_ranges(target_font: TTFont, source_font: TTFont) -> None:
 
 
 def is_cjk_codepoint(
-    codepoint: int, cjk_ranges: Tuple[Tuple[int, int], ...]
+    codepoint: int, cjk_ranges: tuple[tuple[int, int], ...]
 ) -> bool:
     """Check if a Unicode codepoint is in CJK ranges.
 
@@ -188,7 +186,7 @@ def is_cjk_codepoint(
 
 
 def verify_glyph_width(
-    font: TTFont, expected_widths: List[int], file_name: str | None = None
+    font: TTFont, expected_widths: list[int], file_name: str | None = None
 ) -> None:
     """Verify all glyph widths are in expected values.
 

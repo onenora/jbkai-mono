@@ -1,6 +1,6 @@
-"""Core font merging logic for JBKaiMono."""
+from __future__ import annotations
 
-from typing import Set
+from copy import deepcopy
 
 from fontTools.ttLib import TTFont
 
@@ -8,46 +8,28 @@ from .config import FontConfig
 from .utils import is_cjk_codepoint, merge_os2_ranges
 
 
-def get_cjk_glyphs(font: TTFont, config: FontConfig) -> Set[str]:
-    """Get all CJK glyph names from a font.
-
-    Args:
-        font: TTFont object
-        config: FontConfig with CJK ranges
-
-    Returns:
-        Set of glyph names that are CJK characters
-    """
-    cjk_glyphs = set()
+def get_cjk_glyphs(font: TTFont, config: FontConfig) -> set[str]:
+    """Get all CJK glyph names from a font."""
     cmap = font["cmap"].getBestCmap()
+    if not cmap:
+        return set()
+    return {
+        glyph_name
+        for codepoint, glyph_name in cmap.items()
+        if is_cjk_codepoint(codepoint, config.cjk_ranges)
+    }
 
-    if cmap:
-        for codepoint, glyph_name in cmap.items():
-            if is_cjk_codepoint(codepoint, config.cjk_ranges):
-                cjk_glyphs.add(glyph_name)
 
-    return cjk_glyphs
-
-
-def get_cjk_cmap_entries(font: TTFont, config: FontConfig) -> dict:
-    """Get cmap entries for CJK codepoints.
-
-    Args:
-        font: TTFont object
-        config: FontConfig with CJK ranges
-
-    Returns:
-        Dict mapping codepoint -> glyph_name for CJK characters
-    """
-    entries = {}
+def get_cjk_cmap_entries(font: TTFont, config: FontConfig) -> dict[int, str]:
+    """Get cmap entries for CJK codepoints."""
     cmap = font["cmap"].getBestCmap()
-
-    if cmap:
-        for codepoint, glyph_name in cmap.items():
-            if is_cjk_codepoint(codepoint, config.cjk_ranges):
-                entries[codepoint] = glyph_name
-
-    return entries
+    if not cmap:
+        return {}
+    return {
+        codepoint: glyph_name
+        for codepoint, glyph_name in cmap.items()
+        if is_cjk_codepoint(codepoint, config.cjk_ranges)
+    }
 
 
 def merge_fonts(
@@ -91,7 +73,6 @@ def merge_fonts(
     cn_glyf = cn_font["glyf"]
     base_hmtx = base_font["hmtx"]
     cn_hmtx = cn_font["hmtx"]
-    base_cmap = base_font["cmap"].getBestCmap()
 
     # Calculate scaling factors
     base_upm = base_font["head"].unitsPerEm
@@ -117,8 +98,7 @@ def merge_fonts(
         # Copy glyph outline (deep copy to avoid modifying source font)
         # IMPORTANT: Use cn_glyf[name] instead of cn_glyf.glyphs[name]
         # The latter returns undecompiled glyph without coordinates attribute
-        import copy
-        glyph = copy.deepcopy(cn_glyf[glyph_name])
+        glyph = deepcopy(cn_glyf[glyph_name])
         base_glyf.glyphs[glyph_name] = glyph
 
         # Scale glyph to fit target width
@@ -133,7 +113,7 @@ def merge_fonts(
 
         # Set advance width to cn_width (1200) for 2:1 ratio
         # Preserve original LSB ratio for proper glyph positioning
-        orig_width, orig_lsb = cn_hmtx[glyph_name]
+        _, orig_lsb = cn_hmtx[glyph_name]
         scaled_lsb = int(orig_lsb * combined_scale)
         base_hmtx.metrics[glyph_name] = (config.cn_width, scaled_lsb)
 
@@ -245,7 +225,7 @@ def scale_nerd_icons(font: TTFont, config: FontConfig) -> None:
             continue
 
         # Get current metrics
-        width, lsb = hmtx[glyph_name]
+        width, _ = hmtx[glyph_name]
         if width != config.en_width:
             continue  # Skip if not standard English width
 
@@ -364,10 +344,7 @@ def center_cjk_glyphs(font: TTFont, config: FontConfig) -> None:
     }
 
     # Build reverse cmap: glyph_name -> codepoint
-    glyph_to_codepoint = {}
-    if cmap:
-        for cp, gn in cmap.items():
-            glyph_to_codepoint[gn] = cp
+    glyph_to_codepoint = {gn: cp for cp, gn in cmap.items()} if cmap else {}
 
     centered_count = 0
     skipped_count = 0
@@ -381,7 +358,7 @@ def center_cjk_glyphs(font: TTFont, config: FontConfig) -> None:
         if glyph.numberOfContours <= 0:
             continue
 
-        width, lsb = hmtx[glyph_name]
+        width, _ = hmtx[glyph_name]
         if width != config.cn_width:
             continue
 
