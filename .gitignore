@@ -9,6 +9,7 @@ venv/
 ENV/
 env/
 .uv/
+.ruff_cache/
 
 # Build outputs
 output/
