@@ -67,19 +67,19 @@ font:
 
 styles:
   Regular:
-    en_font: "JetBrainsMonoNLNerdFontMono-Regular.ttf"
+    en_font: "JetBrainsMono-Regular.ttf"
     cn_font: "LXGWWenKaiMonoGBScreen.ttf"
     display_name: "Regular"
   Italic:
-    en_font: "JetBrainsMonoNLNerdFontMono-Italic.ttf"
+    en_font: "JetBrainsMono-Italic.ttf"
     cn_font: "LXGWWenKaiMonoGBScreen.ttf"
     display_name: "Italic"
   Bold:
-    en_font: "JetBrainsMonoNLNerdFontMono-Bold.ttf"
+    en_font: "JetBrainsMono-Bold.ttf"
     cn_font: "LXGWWenKaiMonoGBScreen.ttf"
     display_name: "Bold"
   BoldItalic:
-    en_font: "JetBrainsMonoNLNerdFontMono-BoldItalic.ttf"
+    en_font: "JetBrainsMono-BoldItalic.ttf"
     cn_font: "LXGWWenKaiMonoGBScreen.ttf"
     display_name: "Bold Italic"
 
@@ -89,19 +89,21 @@ build:
   parallel: 4
 
 width:
+  monospace: false
+  visual_scale: 1.08
   en_width: 600
   cn_width: 1200
-  visual_scale: 1.08
 ```
 
 ## Source Fonts
 
 Located in `fonts/`:
-- `JetBrainsMonoNLNerdFontMono-Regular.ttf` (Nerd Fonts v3.5.1)
-- `JetBrainsMonoNLNerdFontMono-Bold.ttf` (Nerd Fonts v3.5.1)
-- `JetBrainsMonoNLNerdFontMono-Italic.ttf` (Nerd Fonts v3.5.1)
-- `JetBrainsMonoNLNerdFontMono-BoldItalic.ttf` (Nerd Fonts v3.5.1)
+- `JetBrainsMono-Regular.ttf` (JetBrains Mono v2.304)
+- `JetBrainsMono-Bold.ttf` (JetBrains Mono v2.304)
+- `JetBrainsMono-Italic.ttf` (JetBrains Mono v2.304)
+- `JetBrainsMono-BoldItalic.ttf` (JetBrains Mono v2.304)
 - `LXGWWenKaiMonoGBScreen.ttf` (LXGW WenKai Screen v1.522)
+- `SymbolsNerdFont-Regular.ttf` (Nerd Fonts v3.5.1 Symbols Only)
 
 ## License
 

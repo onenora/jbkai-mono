@@ -17,7 +17,8 @@ output/
 !fonts/*.ttf
 
 # Local configurations and non-redistributable source fonts
-config.jinkai.yaml
+*jinkai*
+*今楷*
 fonts/仓耳今楷*
 
 # IDE

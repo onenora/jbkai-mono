@@ -5,32 +5,33 @@ font:
   family_name: "JBKaiMono"
   version: "1.4"
   author: "onenora"
-  copyright: "Copyright (c) 2026 onenora; source fonts (JetBrains Mono, LXGW WenKai, LXGW ZhenKai) under OFL-1.1."
-  description: "JetBrains Mono NerdFont + LXGW WenKai Mono merged font with 2:1 CJK ratio. English from JetBrains Mono, CJK from LXGW WenKai."
+  copyright: "Copyright (c) 2026 onenora; source fonts (JetBrains Mono, LXGW WenKai) under OFL-1.1; Nerd Fonts under MIT."
+  description: "JetBrains Mono + LXGW WenKai + Symbols Nerd Font merged coding font."
   url: "https://github.com/onenora/jbkai-mono"
   license: "This font is licensed under the SIL Open Font License, Version 1.1. JetBrains Mono: OFL-1.1, LXGW WenKai: OFL-1.1, Nerd Fonts: MIT."
   license_url: "https://openfontlicense.org"
 
 # Source fonts directory
 fonts_dir: "fonts"
+nerd_font: "SymbolsNerdFont-Regular.ttf"
 
 # Styles configuration
 # Standard 4 styles for coding fonts (Regular, Italic, Bold, Bold Italic)
 styles:
   Regular:
-    en_font: "JetBrainsMonoNLNerdFontMono-Regular.ttf"
+    en_font: "JetBrainsMono-Regular.ttf"
     cn_font: "LXGWWenKaiMonoGBScreen.ttf"
     display_name: "Regular"
   Italic:
-    en_font: "JetBrainsMonoNLNerdFontMono-Italic.ttf"
+    en_font: "JetBrainsMono-Italic.ttf"
     cn_font: "LXGWWenKaiMonoGBScreen.ttf"
     display_name: "Italic"
   Bold:
-    en_font: "JetBrainsMonoNLNerdFontMono-Bold.ttf"
+    en_font: "JetBrainsMono-Bold.ttf"
     cn_font: "LXGWWenKaiMonoGBScreen.ttf"
     display_name: "Bold"
   BoldItalic:
-    en_font: "JetBrainsMonoNLNerdFontMono-BoldItalic.ttf"
+    en_font: "JetBrainsMono-BoldItalic.ttf"
     cn_font: "LXGWWenKaiMonoGBScreen.ttf"
     display_name: "Bold Italic"
 
@@ -40,9 +41,9 @@ build:
   output_dir: "output/fonts"
   parallel: 4  # Number of parallel workers
 
-# Glyph width configuration (2:1 ratio)
+# Glyph width configuration
 width:
+  monospace: false
+  visual_scale: 1.08
   en_width: 600
   cn_width: 1200
-  # CJK visual scale factor (1.0 = no extra scaling, 1.08 = 8% larger)
-  visual_scale: 1.08

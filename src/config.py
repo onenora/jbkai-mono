@@ -14,6 +14,9 @@ class FontConfig:
     family_name_compact: str = "JBKaiMono"
     version: str = "1.0"
 
+    # Monospace mode: True forces 2:1 grid, False preserves native advance widths
+    monospace: bool = True
+
     # CJK visual scale factor (1.0 = no extra scaling, 1.08 = 8% larger)
     visual_scale: float = 1.08
 

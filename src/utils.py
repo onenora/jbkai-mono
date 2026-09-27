@@ -179,6 +179,31 @@ def is_cjk_codepoint(codepoint: int, cjk_ranges: tuple[tuple[int, int], ...]) ->
     return False
 
 
+def verify_glyph_width_non_negative(font: TTFont, file_name: str | None = None) -> None:
+    """Verify all glyph advance widths are non-negative.
+
+    Args:
+        font: TTFont object
+        file_name: Optional file name for error messages
+
+    Raises:
+        ValueError: If glyphs with negative widths are found
+    """
+    hmtx = font["hmtx"]
+    negative: list[tuple[str, int]] = []
+    for name in font.getGlyphOrder():
+        width, _ = hmtx[name]
+        if width < 0:
+            negative.append((name, width))
+
+    if negative:
+        sample = "\n".join(f"  {name}: {width}" for name, width in negative[:10])
+        raise ValueError(
+            f"Found {len(negative)} glyphs with negative widths in {file_name or 'font'}:\n{sample}"
+        )
+    print(f"Verified glyph widths in {file_name or 'font'}")
+
+
 def verify_glyph_width(
     font: TTFont, expected_widths: list[int] | tuple[int, ...], file_name: str | None = None
 ) -> None:

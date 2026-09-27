@@ -46,11 +46,34 @@ RIGHT_PUNCTUATION: frozenset[int] = frozenset(
 )
 
 NERD_RANGES: tuple[tuple[int, int], ...] = (
-    (0xE000, 0xF8FF),  # Private Use Area
-    (0xF0000, 0xFFFFD),  # Supplementary Private Use Area-A
+    (0x23FB, 0x23FE),      # IEC Power Symbols
+    (0x2630, 0x2630),      # Hamburger menu
+    (0x2665, 0x2665),      # Heart
+    (0x26A1, 0x26A1),      # High voltage
+    (0x276C, 0x2771),      # Heavy angle brackets
+    (0x2B58, 0x2B58),      # Heavy circle
+    (0xE000, 0xF8FF),      # Private Use Area (Powerline, Font Awesome, Devicons, etc.)
+    (0xF0000, 0xFFFFD),    # Supplementary Private Use Area-A (Material Design, etc.)
+    (0x100000, 0x10FFFD),  # Supplementary Private Use Area-B
 )
 
 POWERLINE_RANGE: tuple[int, int] = (0xE0A0, 0xE0DF)
+
+
+def is_nerd_codepoint(codepoint: int) -> bool:
+    """Check if codepoint belongs to Nerd Font icon ranges."""
+    return any(start <= codepoint <= end for start, end in NERD_RANGES)
+
+
+def update_font_cmap(target_font: TTFont, added_mapping: dict[int, str]) -> None:
+    """Update all Unicode cmap tables with new codepoint-to-glyph mappings."""
+    for table in target_font["cmap"].tables:
+        if (table.platformID == 3 and table.platEncID in (1, 10)) or table.platformID == 0:
+            for codepoint, glyph_name in added_mapping.items():
+                if table.format == 4 and codepoint > 0xFFFF:
+                    continue
+                if codepoint not in table.cmap:
+                    table.cmap[codepoint] = glyph_name
 
 CJK_IDEOGRAPH_RANGES: tuple[tuple[int, int], ...] = (
     (0x4E00, 0x9FFF),  # CJK Unified Ideographs
@@ -90,135 +113,171 @@ def get_cjk_glyphs(font: TTFont, config: FontConfig) -> set[str]:
 
 def merge_fonts(
     base_font_path: str,
-    cn_font_path: str,
-    config: FontConfig,
+    cn_font_path: str | None = None,
+    config: FontConfig = FontConfig(),
+    nerd_font_path: str | None = None,
 ) -> TTFont:
-    """Merge CJK glyphs from cn_font into base_font.
+    """Merge CJK glyphs and/or NerdFont icons into base_font.
 
-    The base font (JetBrains Mono NerdFont) provides:
-    - English characters
-    - NerdFont icons
-
-    The CN font (LXGW WenKai Mono) provides:
-    - CJK characters
+    The base font provides English characters (and optionally ligatures).
+    The CN font provides CJK ideographs and punctuation.
+    The Nerd Font provides developer icons and powerline glyphs.
 
     Args:
-        base_font_path: Path to JetBrains Mono NerdFont
-        cn_font_path: Path to LXGW WenKai Mono
+        base_font_path: Path to base font (e.g. JetBrains Mono)
+        cn_font_path: Optional path to CJK font (e.g. 仓耳今楷02-W04)
         config: FontConfig object
+        nerd_font_path: Optional path to Nerd Font (e.g. Symbols Nerd Font)
 
     Returns:
         Merged TTFont object
     """
     print(f"  Loading base font: {base_font_path}")
     base_font = TTFont(base_font_path)
-    print(f"  Loading CN font: {cn_font_path}")
-    cn_font = TTFont(cn_font_path)
-
-    # Get existing glyphs in base font (to avoid overwriting)
-    base_glyph_names = set(base_font.getGlyphOrder())
-
-    # Get CJK glyphs and cmap entries from CN font
-    cjk_cmap = get_cjk_cmap_entries(cn_font, config)
-    cjk_glyphs = set(cjk_cmap.values())
-
-    print(f"  Found {len(cjk_glyphs)} CJK glyphs in CN font")
-
-    # Get font tables
-    base_glyf = base_font["glyf"]
-    cn_glyf = cn_font["glyf"]
-    base_hmtx = base_font["hmtx"]
-    cn_hmtx = cn_font["hmtx"]
-
-    # Calculate scaling factors
     base_upm = base_font["head"].unitsPerEm
-    cn_upm = cn_font["head"].unitsPerEm
+    base_glyf = base_font["glyf"]
+    base_hmtx = base_font["hmtx"]
+    base_glyph_names = set(base_font.getGlyphOrder())
+    base_cmap = base_font["cmap"].getBestCmap() or {}
 
-    # UPM normalization scale with visual adjustment
-    # visual_scale adjusts the final glyph size (1.08 = 8% larger)
-    upm_scale = base_upm / cn_upm  # e.g., 1000 / 2048 = 0.4883
-    combined_scale = upm_scale * config.visual_scale
-    print(
-        f"  Scaling CN glyphs by {combined_scale:.4f} (UPM: {cn_upm} -> {base_upm}, visual: {config.visual_scale:.2f}x)"
-    )
+    cjk_added: list[str] = []
+    cjk_cmap_added: dict[int, str] = {}
 
-    glyphs_added = []
+    # Merge CJK font if provided and distinct from base
+    if cn_font_path and cn_font_path != base_font_path:
+        print(f"  Loading CN font: {cn_font_path}")
+        cn_font = TTFont(cn_font_path)
+        cn_upm = cn_font["head"].unitsPerEm
+        cn_glyf = cn_font["glyf"]
+        cn_hmtx = cn_font["hmtx"]
 
-    for glyph_name in cjk_glyphs:
-        # Skip if glyph already exists in base font
-        if glyph_name in base_glyph_names:
-            continue
+        cjk_cmap = get_cjk_cmap_entries(cn_font, config)
+        print(f"  Found {len(cjk_cmap)} CJK entries in CN font")
 
-        # Skip if glyph doesn't exist in cn font's glyf table
-        if glyph_name not in cn_glyf.glyphs:
-            continue
+        upm_scale = base_upm / cn_upm
+        combined_scale = upm_scale * config.visual_scale
+        if combined_scale != 1.0:
+            print(
+                f"  Scaling CN glyphs by {combined_scale:.4f} (UPM: {cn_upm} -> {base_upm}, visual: {config.visual_scale:.2f}x)"
+            )
 
-        # Copy glyph outline (deep copy to avoid modifying source font)
-        # IMPORTANT: Use cn_glyf[name] instead of cn_glyf.glyphs[name]
-        # The latter returns undecompiled glyph without coordinates attribute
-        glyph = deepcopy(cn_glyf[glyph_name])
-        base_glyf.glyphs[glyph_name] = glyph
+        for codepoint, orig_glyph_name in cjk_cmap.items():
+            if codepoint in base_cmap:
+                continue
+            if orig_glyph_name not in cn_glyf.glyphs:
+                continue
 
-        # Scale glyph to fit target width
-        if hasattr(glyph, "coordinates") and glyph.numberOfContours > 0:
-            # Ensure bounds are calculated before scaling
-            if not hasattr(glyph, "xMin") or glyph.xMin is None:
-                glyph.recalcBounds(base_glyf)
+            target_glyph_name = orig_glyph_name
+            if target_glyph_name in base_glyph_names:
+                target_glyph_name = f"cjk_{codepoint:04X}"
 
-            # Apply combined scaling
-            glyph.coordinates.scale((combined_scale, combined_scale))
-            glyph.recalcBounds(base_glyf)
+            glyph = deepcopy(cn_glyf[orig_glyph_name])
+            base_glyf.glyphs[target_glyph_name] = glyph
 
-        # Set advance width to cn_width (1200) for 2:1 ratio
-        # Preserve original LSB ratio for proper glyph positioning
-        _, orig_lsb = cn_hmtx[glyph_name]
-        scaled_lsb = int(orig_lsb * combined_scale)
-        base_hmtx.metrics[glyph_name] = (config.cn_width, scaled_lsb)
+            if hasattr(glyph, "coordinates") and glyph.numberOfContours > 0:
+                if not hasattr(glyph, "xMin") or glyph.xMin is None:
+                    glyph.recalcBounds(base_glyf)
+                if combined_scale != 1.0:
+                    glyph.coordinates.scale((combined_scale, combined_scale))
+                    glyph.recalcBounds(base_glyf)
 
-        glyphs_added.append(glyph_name)
+            orig_adv, orig_lsb = cn_hmtx[orig_glyph_name]
+            if config.monospace:
+                scaled_lsb = int(orig_lsb * combined_scale)
+                base_hmtx.metrics[target_glyph_name] = (config.cn_width, scaled_lsb)
+            else:
+                scaled_adv = int(round(orig_adv * combined_scale))
+                scaled_lsb = int(round(orig_lsb * combined_scale))
+                base_hmtx.metrics[target_glyph_name] = (scaled_adv, scaled_lsb)
 
-    print(f"  Added {len(glyphs_added)} new glyphs")
+            cjk_added.append(target_glyph_name)
+            base_glyph_names.add(target_glyph_name)
+            cjk_cmap_added[codepoint] = target_glyph_name
 
-    if not glyphs_added:
+        print(f"  Added {len(cjk_added)} CJK glyphs")
+        update_font_cmap(base_font, cjk_cmap_added)
+        merge_os2_ranges(base_font, cn_font)
         cn_font.close()
-        return base_font
 
-    # Update glyph order
-    new_glyph_order = base_font.getGlyphOrder() + glyphs_added
-    base_font.setGlyphOrder(new_glyph_order)
-    base_font["maxp"].numGlyphs = len(new_glyph_order)
+    # Merge Nerd Font icons if provided
+    nerd_added: list[str] = []
+    nerd_cmap_added: dict[int, str] = {}
 
-    # Update cmap with new glyphs
-    # IMPORTANT: Must update all cmap subtables, not just getBestCmap()
-    # Office applications may only read format=4 table for BMP characters
-    glyphs_added_set = set(glyphs_added)
-    for table in base_font["cmap"].tables:
-        # Only update tables that map Unicode codepoints
-        if table.platformID == 3 and table.platEncID in (1, 10):  # Windows Unicode BMP/Full
-            for codepoint, glyph_name in cjk_cmap.items():
-                if glyph_name in glyphs_added_set:
-                    # format=4 only supports BMP (U+0000-U+FFFF)
-                    if table.format == 4 and codepoint > 0xFFFF:
-                        continue
-                    if codepoint not in table.cmap:
-                        table.cmap[codepoint] = glyph_name
-        elif table.platformID == 0:  # Unicode platform
-            for codepoint, glyph_name in cjk_cmap.items():
-                if glyph_name in glyphs_added_set:
-                    if table.format == 4 and codepoint > 0xFFFF:
-                        continue
-                    if codepoint not in table.cmap:
-                        table.cmap[codepoint] = glyph_name
+    if nerd_font_path:
+        print(f"  Loading Nerd Font: {nerd_font_path}")
+        nerd_font = TTFont(nerd_font_path)
+        nerd_upm = nerd_font["head"].unitsPerEm
+        nerd_glyf = nerd_font["glyf"]
+        nerd_hmtx = nerd_font["hmtx"]
+        nerd_cmap = nerd_font["cmap"].getBestCmap() or {}
 
-    # Update hhea table
+        icon_scale = base_upm / nerd_upm
+
+        # Filter ONLY Nerd Font icon codepoints
+        icon_entries = {
+            cp: gn
+            for cp, gn in nerd_cmap.items()
+            if is_nerd_codepoint(cp) and cp not in base_cmap and cp not in cjk_cmap_added
+        }
+        print(f"  Found {len(icon_entries)} Nerd Font icon glyphs to merge")
+
+        for codepoint, orig_glyph_name in icon_entries.items():
+            if orig_glyph_name not in nerd_glyf.glyphs:
+                continue
+
+            target_glyph_name = orig_glyph_name
+            if target_glyph_name in base_glyph_names:
+                target_glyph_name = f"nerd_{codepoint:04X}"
+
+            glyph = deepcopy(nerd_glyf[orig_glyph_name])
+            base_glyf.glyphs[target_glyph_name] = glyph
+
+            if hasattr(glyph, "coordinates") and glyph.numberOfContours > 0:
+                if not hasattr(glyph, "xMin") or glyph.xMin is None:
+                    glyph.recalcBounds(base_glyf)
+                if icon_scale != 1.0:
+                    glyph.coordinates.scale((icon_scale, icon_scale))
+                    glyph.recalcBounds(base_glyf)
+
+            orig_adv, orig_lsb = nerd_hmtx[orig_glyph_name]
+            if config.monospace:
+                is_powerline = POWERLINE_RANGE[0] <= codepoint <= POWERLINE_RANGE[1]
+                target_w = config.cn_width if is_powerline else config.en_width
+                if hasattr(glyph, "xMin") and glyph.xMin is not None:
+                    gw = glyph.xMax - glyph.xMin
+                    ideal_lsb = (target_w - gw) // 2
+                    dx = ideal_lsb - glyph.xMin
+                    if abs(dx) > 1 and hasattr(glyph, "coordinates"):
+                        glyph.coordinates.translate((dx, 0))
+                        glyph.recalcBounds(base_glyf)
+                    base_hmtx.metrics[target_glyph_name] = (target_w, ideal_lsb)
+                else:
+                    base_hmtx.metrics[target_glyph_name] = (target_w, 0)
+            else:
+                scaled_adv = int(round(orig_adv * icon_scale))
+                scaled_lsb = int(round(orig_lsb * icon_scale))
+                base_hmtx.metrics[target_glyph_name] = (scaled_adv, scaled_lsb)
+
+            nerd_added.append(target_glyph_name)
+            base_glyph_names.add(target_glyph_name)
+            nerd_cmap_added[codepoint] = target_glyph_name
+
+        print(f"  Added {len(nerd_added)} Nerd Font icons")
+        update_font_cmap(base_font, nerd_cmap_added)
+        merge_os2_ranges(base_font, nerd_font)
+        nerd_font.close()
+
+    # Update glyph order and headers
+    all_added = cjk_added + nerd_added
+    if all_added:
+        new_glyph_order = base_font.getGlyphOrder() + all_added
+        base_font.setGlyphOrder(new_glyph_order)
+        base_font["maxp"].numGlyphs = len(new_glyph_order)
+
     if "hhea" in base_font:
-        base_font["hhea"].advanceWidthMax = max(base_font["hhea"].advanceWidthMax, config.cn_width)
+        base_font["hhea"].advanceWidthMax = max(m[0] for m in base_hmtx.metrics.values())
         base_font["hhea"].numberOfHMetrics = len(base_hmtx.metrics)
 
-    # Merge OS/2 ranges from CN font to base font
-    merge_os2_ranges(base_font, cn_font)
-
-    cn_font.close()
     return base_font
 
 

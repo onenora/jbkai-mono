@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from src.config import FontConfig
 from src.merge import center_cjk_glyphs, merge_fonts, scale_nerd_icons
-from src.utils import update_font_names, verify_glyph_width
+from src.utils import update_font_names, verify_glyph_width, verify_glyph_width_non_negative
 
 
 def load_config(config_path: Path) -> dict[str, Any]:
@@ -47,6 +47,7 @@ def build_single_font(
     output_dir: Path,
     config: FontConfig,
     metadata: FontMetadata,
+    nerd_font_path: Path | None = None,
 ) -> str:
     """Build a single font variant.
 
@@ -58,6 +59,7 @@ def build_single_font(
         output_dir: Output directory
         config: FontConfig object
         metadata: Font metadata dict (author, copyright, description, url, license, license_url)
+        nerd_font_path: Optional path to Nerd Font icons
 
     Returns:
         Output file path
@@ -69,16 +71,18 @@ def build_single_font(
         base_font_path=str(en_font_path),
         cn_font_path=str(cn_font_path),
         config=config,
+        nerd_font_path=str(nerd_font_path) if nerd_font_path else None,
     )
 
-    # Monospace-specific processing
-    # Scale NerdFont icons to CJK width
-    print("  Scaling NerdFont icons...")
-    scale_nerd_icons(merged_font, config)
+    if config.monospace:
+        # Monospace-specific processing
+        # Scale NerdFont icons to CJK width
+        print("  Scaling NerdFont icons...")
+        scale_nerd_icons(merged_font, config)
 
-    # Center CJK glyphs
-    print("  Centering CJK glyphs...")
-    center_cjk_glyphs(merged_font, config)
+        # Center CJK glyphs
+        print("  Centering CJK glyphs...")
+        center_cjk_glyphs(merged_font, config)
 
     # Update font names
     postscript_name = f"{config.family_name_compact}-{style}"
@@ -102,11 +106,17 @@ def build_single_font(
     # Verify glyph widths
     print("  Verifying glyph widths...")
     try:
-        verify_glyph_width(
-            font=merged_font,
-            expected_widths=[0, config.en_width, config.cn_width],
-            file_name=postscript_name,
-        )
+        if config.monospace:
+            verify_glyph_width(
+                font=merged_font,
+                expected_widths=[0, config.en_width, config.cn_width],
+                file_name=postscript_name,
+            )
+        else:
+            verify_glyph_width_non_negative(
+                font=merged_font,
+                file_name=postscript_name,
+            )
     except ValueError as e:
         print(f"  Warning: {e}")
 
@@ -201,9 +211,11 @@ Configuration priority: CLI args > config.yaml > defaults
     # Font metadata from config
     family_name = get_config_value(yaml_config, "font", "family_name") or "JBKaiMono"
     version = get_config_value(yaml_config, "font", "version") or "1.0"
+    monospace = get_config_value(yaml_config, "width", "monospace", default=True)
     en_width = get_config_value(yaml_config, "width", "en_width", default=600)
     cn_width = get_config_value(yaml_config, "width", "cn_width", default=1200)
     visual_scale = get_config_value(yaml_config, "width", "visual_scale", default=1.08)
+    global_nerd_font = get_config_value(yaml_config, "nerd_font")
 
     # Font metadata for name table
     metadata = {
@@ -220,6 +232,7 @@ Configuration priority: CLI args > config.yaml > defaults
         family_name=family_name,
         family_name_compact=family_name,
         version=version,
+        monospace=monospace,
         visual_scale=visual_scale,
         en_width=en_width,
         cn_width=cn_width,
@@ -240,6 +253,7 @@ Configuration priority: CLI args > config.yaml > defaults
         style_cfg = styles_config[style]
         en_font = style_cfg.get("en_font")
         cn_font = style_cfg.get("cn_font")
+        nerd_font = style_cfg.get("nerd_font") or global_nerd_font
         display_name = style_cfg.get("display_name", style)
 
         if not en_font or not cn_font:
@@ -248,6 +262,7 @@ Configuration priority: CLI args > config.yaml > defaults
 
         en_font_path = fonts_dir / en_font
         cn_font_path = fonts_dir / cn_font
+        nerd_font_path = (fonts_dir / nerd_font) if nerd_font else None
 
         if not en_font_path.exists():
             print(f"Error: English font not found: {en_font_path}")
@@ -255,10 +270,14 @@ Configuration priority: CLI args > config.yaml > defaults
         if not cn_font_path.exists():
             print(f"Error: Chinese font not found: {cn_font_path}")
             sys.exit(1)
+        if nerd_font_path and not nerd_font_path.exists():
+            print(f"Error: Nerd font not found: {nerd_font_path}")
+            sys.exit(1)
 
         font_paths[style] = {
             "en_font_path": en_font_path,
             "cn_font_path": cn_font_path,
+            "nerd_font_path": nerd_font_path,
             "display_name": display_name,
         }
 
@@ -269,13 +288,18 @@ Configuration priority: CLI args > config.yaml > defaults
     print(f"Styles: {', '.join(styles)}")
     print(f"Source: {fonts_dir}")
     print(f"Output: {output_dir}")
-    print(f"Width ratio: {config.cn_width}:{config.en_width} (2:1)")
+    if config.monospace:
+        print(f"Width ratio: {config.cn_width}:{config.en_width} (2:1 Monospace)")
+    else:
+        print("Mode: Proportional / Native metrics (not fixed 2:1 monospace)")
     print("Font mapping:")
     for style in styles:
         paths = font_paths[style]
         print(f"  {style}:")
         print(f"    EN: {paths['en_font_path'].name}")
         print(f"    CN: {paths['cn_font_path'].name}")
+        if paths["nerd_font_path"]:
+            print(f"    NERD: {paths['nerd_font_path'].name}")
 
     # Build fonts
     if parallel <= 1:
@@ -290,6 +314,7 @@ Configuration priority: CLI args > config.yaml > defaults
                 output_dir,
                 config,
                 metadata,
+                paths["nerd_font_path"],
             )
     else:
         # Parallel build
@@ -304,6 +329,7 @@ Configuration priority: CLI args > config.yaml > defaults
                     output_dir,
                     config,
                     metadata,
+                    font_paths[style]["nerd_font_path"],
                 ): style
                 for style in styles
             }
