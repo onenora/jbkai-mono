@@ -52,6 +52,24 @@ NERD_RANGES: tuple[tuple[int, int], ...] = (
 
 POWERLINE_RANGE: tuple[int, int] = (0xE0A0, 0xE0DF)
 
+CJK_IDEOGRAPH_RANGES: tuple[tuple[int, int], ...] = (
+    (0x4E00, 0x9FFF),  # CJK Unified Ideographs
+    (0x3400, 0x4DBF),  # CJK Unified Ideographs Extension A
+    (0x20000, 0x2A6DF),  # CJK Unified Ideographs Extension B
+    (0x2A700, 0x2B73F),  # CJK Unified Ideographs Extension C
+    (0x2B740, 0x2B81F),  # CJK Unified Ideographs Extension D
+    (0x2B820, 0x2CEAF),  # CJK Unified Ideographs Extension E
+    (0x2CEB0, 0x2EBEF),  # CJK Unified Ideographs Extension F
+    (0x30000, 0x3134F),  # CJK Unified Ideographs Extension G
+    (0x2E80, 0x2EFF),  # CJK Radicals Supplement
+    (0x2F00, 0x2FDF),  # Kangxi Radicals
+    (0x3100, 0x312F),  # Bopomofo
+    (0x31A0, 0x31BF),  # Bopomofo Extended
+    (0x31C0, 0x31EF),  # CJK Strokes
+    (0xF900, 0xFAFF),  # CJK Compatibility Ideographs
+    (0x2F800, 0x2FA1F),  # CJK Compatibility Ideographs Supplement
+)
+
 
 def get_cjk_cmap_entries(font: TTFont, config: FontConfig) -> dict[int, str]:
     """Get cmap entries for CJK codepoints."""
@@ -395,9 +413,10 @@ def center_cjk_glyphs(font: TTFont, config: FontConfig) -> None:
             paired_count += 1
             continue
 
-        # Only center glyphs that occupy more than half the advance width
-        # Narrow glyphs (like punctuation) keep their original position
-        if glyph_width <= config.cn_width // 2:
+        # Narrow glyphs (like punctuation) keep their original position,
+        # but ideographs/radicals/bopomofo should always be centered.
+        is_ideograph = any(start <= codepoint <= end for start, end in CJK_IDEOGRAPH_RANGES)
+        if not is_ideograph and glyph_width <= config.cn_width // 2:
             skipped_count += 1
             continue
 

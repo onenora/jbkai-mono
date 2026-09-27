@@ -16,6 +16,10 @@ output/
 *.ttf
 !fonts/*.ttf
 
+# Local configurations and non-redistributable source fonts
+config.jinkai.yaml
+fonts/仓耳今楷*
+
 # IDE
 .idea/
 .vscode/
